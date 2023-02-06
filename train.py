@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import StepLR
 
 import utils.data_process
 from utils.data_process import MyDataset
-from models.lstm import LSTM
+from models.lstm import LSTM, BiLSTM
 from tqdm import tqdm
 from statsmodels.tsa.stattools import adfuller
 
@@ -18,12 +18,18 @@ from utils.indicators_culculate import get_val_loss, get_mape
 
 
 def train(input_size, hidden_size, num_layers, output_size, batch_size, lr, weight_decay, step_size, gamma, optimizer,
-          epochs, train_dt, val_dt, path, compute_device, save_state=True):
+          epochs, train_dt, val_dt, path, compute_device, save_state=True, bidirectional=False):
     input_size, hidden_size, num_layers = input_size, hidden_size, num_layers
     output_size = output_size
     
-    model = LSTM(input_size=input_size, hidden_size=hidden_size, output_size=output_size,
-                 batch_size=batch_size, device=compute_device).to(compute_device)
+    if bidirectional:
+        model = BiLSTM(input_size=input_size, hidden_size=hidden_size, output_size=output_size,
+                       batch_size=batch_size, device=compute_device, num_layers=num_layers).to(compute_device)
+        print('双向LSTM')
+    else:
+        model = LSTM(input_size=input_size, hidden_size=hidden_size, output_size=output_size,
+                     batch_size=batch_size, device=compute_device, num_layers=num_layers).to(compute_device)
+        print('单向LSTM')
     
     loss_function = nn.MSELoss().to(compute_device)
     
@@ -35,9 +41,9 @@ def train(input_size, hidden_size, num_layers, output_size, batch_size, lr, weig
     scheduler = StepLR(optimizer=optimizer, step_size=step_size, gamma=gamma)
     min_epochs = 10
     best_model = None
-    min_val_loss = 5
+    min_val_loss = 1000000
     
-    for epoch in tqdm(range(epochs)):
+    for epoch in tqdm(range(epochs), mininterval=1):
         train_loss = []
         model.train()
         for (seq, label) in train_dt:
@@ -57,7 +63,8 @@ def train(input_size, hidden_size, num_layers, output_size, batch_size, lr, weig
             min_val_loss = val_loss
             best_model = copy.deepcopy(model)
         
-        print(f'epoch: {epoch + 1}, train_loss: {np.mean(train_loss)}, valid_loss: {val_loss}')
+        print(
+            f"epoch: {epoch + 1}, train_loss: {np.mean(train_loss)}, valid_loss: {val_loss}, learning rate: {optimizer.state_dict()['param_groups'][0]['lr']}")
     
     state = {f'models: {best_model.state_dict()}'}
     if save_state:
@@ -89,11 +96,12 @@ def test(test_dt, path, target_max, target_min, compute_device):
     pred = np.array(list(map(lambda res: res.item(), pred)))
     y = (target_max - target_min) * y + target_min
     pred = (target_max - target_min) * pred + target_min
-    
-    print(f"mape: {get_mape(y, pred)}")
+    print(f'Predictions: {pred}, target max and min: {target_max}, {target_min}')
+    # print(f"mape: {get_mape(y, pred)}")
     
     plt.plot(y, c='blue', ms=1, alpha=0.75, label='ground truth')
     plt.plot(pred, c='red', ms=1, alpha=0.75, label='prediction')
     plt.grid(axis='y')
     plt.legend()
-    plt.show()
+    plt.draw()
+    plt.savefig(f'./graphic/fishing_model.png')

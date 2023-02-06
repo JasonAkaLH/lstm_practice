@@ -39,6 +39,7 @@ def get_difference(y_data):
 def process(x_data, y_data, shuffle, x_min, x_max, y_min, y_max, batch_size, features_size):
     x_data = (x_data - x_min) / (x_max - x_min)
     target = (y_data - y_min) / (y_max - y_min)
+    # target = y_data
     x_data = x_data.values
     seq = []
     for i in range(len(x_data) - features_size):
@@ -48,7 +49,7 @@ def process(x_data, y_data, shuffle, x_min, x_max, y_min, y_max, batch_size, fea
             x = x_data[j]
             train_seq.append(x)
         train_label.append(target[i])
-        train_seq = torch.FloatTensor(train_seq)
+        train_seq = torch.FloatTensor(np.array(train_seq))
         train_label = torch.FloatTensor(train_label).view(-1)
         seq.append((train_seq, train_label))
     
